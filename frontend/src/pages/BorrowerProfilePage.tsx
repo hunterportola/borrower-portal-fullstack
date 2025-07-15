@@ -1,13 +1,15 @@
-import { useState } from 'react';
-import { useSelector } from 'react-redux';
-import type { RootState } from '../store/store';
+import { useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import type { RootState, AppDispatch } from '../store/store';
+import { fetchUser } from '../store/userSlice'; // <-- 1. IMPORT THE THUNK
 import { PersonalInfoSection } from '../components/PersonalInfoSection';
 import { BankDetailsSection } from '../components/BankDetailsSection';
 import { EmploymentInfoSection } from '../components/EmploymentInfoSection';
 import { IdDocumentSection } from '../components/IdDocumentSection';
 import { WalletDetailsSection } from '../components/WalletDetailsSection';
+import { CardDetailsSection } from '../components/CardDetailsSection';
 
-type ProfileTab = 'personal-info' | 'bank-details' | 'wallet-details' | 'employment-info' | 'id-document';
+type ProfileTab = 'personal-info' | 'bank-details' | 'wallet-details' | 'card-details' | 'employment-info' | 'id-document';
 
 function ProfileNavLink({ label, isActive, onClick }: { label: string, isActive: boolean, onClick: () => void }) {
   return (
@@ -16,12 +18,19 @@ function ProfileNavLink({ label, isActive, onClick }: { label: string, isActive:
 }
 
 export function BorrowerProfilePage() {
-    // Reverted to the simple selector for dummy data
+    const dispatch: AppDispatch = useDispatch(); // <-- 2. GET THE DISPATCH FUNCTION
     const user = useSelector((state: RootState) => state.user);
     const [activeTab, setActiveTab] = useState<ProfileTab>('personal-info');
+    
+    // --- 3. FETCH THE USER DATA ON COMPONENT LOAD ---
+    useEffect(() => {
+        if (user.status === 'idle') {
+            dispatch(fetchUser());
+        }
+    }, [user.status, dispatch]);
 
-    // This check is sufficient for dummy data
-    if (!user) {
+
+    if (user.status === 'loading' || user.status === 'idle') {
       return <div className="text-center p-24 font-serif text-steel">Loading Profile...</div>;
     }
   
@@ -38,13 +47,15 @@ export function BorrowerProfilePage() {
                <ProfileNavLink label="Personal info" isActive={activeTab === 'personal-info'} onClick={() => navigate('personal-info')} />
                <ProfileNavLink label="Bank details" isActive={activeTab === 'bank-details'} onClick={() => navigate('bank-details')} />
                <ProfileNavLink label="Wallet details" isActive={activeTab === 'wallet-details'} onClick={() => navigate('wallet-details')} />
+               <ProfileNavLink label="Card details" isActive={activeTab === 'card-details'} onClick={() => navigate('card-details')} />
                <ProfileNavLink label="Employment info" isActive={activeTab === 'employment-info'} onClick={() => navigate('employment-info')} />
                <ProfileNavLink label="ID document" isActive={activeTab === 'id-document'} onClick={() => navigate('id-document')} />
             </div>
             <div className="col-span-3">
               {activeTab === 'personal-info' && <PersonalInfoSection user={user} errors={{}} showErrors={false} />}
-              {activeTab === 'bank-details' && <BankDetailsSection user={user} />}
-              {activeTab === 'wallet-details' && <WalletDetailsSection isActive={activeTab === 'wallet-details'} />}
+              {activeTab === 'bank-details' && <BankDetailsSection />}
+              {activeTab === 'wallet-details' && <WalletDetailsSection />}
+              {activeTab === 'card-details' && <CardDetailsSection />}
               {activeTab === 'employment-info' && <EmploymentInfoSection user={user} />}
               {activeTab === 'id-document' && <IdDocumentSection user={user} />}
             </div>

@@ -1,13 +1,16 @@
-import { useState } from 'react';
-import { useSelector } from 'react-redux';
-import type { RootState } from '../store/store';
+import { useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import type { RootState, AppDispatch } from '../store/store';
+import { fetchLoan } from '../store/loanSlice'; // <-- 1. IMPORT THE THUNK
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
-import { Modal } from '../components/Modal'; // Corrected import path
+import { Modal } from '../components/Modal';
 import { TransactionHistory } from '../components/TransactionHistory';
 import { PaymentSchedule } from '../components/PaymentSchedule';
 import { PaymentOptions } from '../components/PaymentOptions';
 import { StablecoinPaymentModal } from '../components/StableCoinPaymentModal';
+import { ACHPaymentModal } from '../components/ACHPaymentModal';
+import { CardPaymentModal } from '../components/CardPaymentModal';
 
 function DetailRow({ label, value }: { label: string; value: string | number }) {
   return (
@@ -19,11 +22,21 @@ function DetailRow({ label, value }: { label: string; value: string | number }) 
 }
 
 export function MyLoanPage() {
+  const dispatch: AppDispatch = useDispatch(); // <-- 2. GET THE DISPATCH FUNCTION
   const loan = useSelector((state: RootState) => state.loan);
   const [isTxHistoryOpen, setIsTxHistoryOpen] = useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [isPayDebtOpen, setIsPayDebtOpen] = useState(false);
   const [isStablecoinModalOpen, setIsStablecoinModalOpen] = useState(false);
+  const [isACHModalOpen, setIsACHModalOpen] = useState(false);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+
+  // --- 3. FETCH THE LOAN DATA ON COMPONENT LOAD ---
+  useEffect(() => {
+    if (loan.status === 'idle') {
+        dispatch(fetchLoan());
+    }
+  }, [loan.status, dispatch]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -36,6 +49,20 @@ export function MyLoanPage() {
     setIsPayDebtOpen(false);
     setIsStablecoinModalOpen(true);
   };
+  
+  const handleOpenACHModal = () => {
+    setIsPayDebtOpen(false);
+    setIsACHModalOpen(true);
+  };
+
+  const handleOpenCardModal = () => {
+    setIsPayDebtOpen(false);
+    setIsCardModalOpen(true);
+  };
+
+  if (loan.status === 'loading' || loan.status === 'idle') {
+    return <div className="text-center p-24 font-serif text-steel">Loading Loan Details...</div>;
+  }
 
   return (
     <div className="px-24 py-8">
@@ -111,14 +138,22 @@ export function MyLoanPage() {
       </Modal>
       <Modal isOpen={isPayDebtOpen} onClose={() => setIsPayDebtOpen(false)} title="Choose Payment Method">
         <PaymentOptions 
-            onSelectACH={() => alert('ACH Selected!')}
-            onSelectCard={() => alert('Card Selected!')}
+            onSelectACH={handleOpenACHModal}
+            onSelectCard={handleOpenCardModal}
             onSelectStablecoin={handleOpenStablecoinModal}
         />
       </Modal>
+      <ACHPaymentModal
+        isOpen={isACHModalOpen}
+        onClose={() => setIsACHModalOpen(false)}
+      />
       <StablecoinPaymentModal 
         isOpen={isStablecoinModalOpen}
         onClose={() => setIsStablecoinModalOpen(false)}
+      />
+      <CardPaymentModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
       />
     </div>
   );

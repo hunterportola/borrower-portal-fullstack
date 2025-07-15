@@ -1,8 +1,9 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import type { PayloadAction } from '@reduxjs/toolkit'; // Fixed: Type-only import
+import type { PayloadAction } from '@reduxjs/toolkit';
 import axios from 'axios';
 
 export interface UserState {
+  id: string | null;
   firstName: string;
   lastName: string;
   email: string;
@@ -12,43 +13,47 @@ export interface UserState {
   birthDay: string;
   birthMonth: string;
   birthYear: string;
-  bankName: string;
-  accountHolderName: string;
-  bsb: string; // Fixed: Added missing property
-  accountNumber: string;
   employmentStatus: string;
   employerName: string;
   jobTitle: string;
   idDocument: string | null;
+  walletAddress: string | null; // <-- ADDED THIS LINE
+  status: 'idle' | 'loading' | 'succeeded' | 'failed';
 }
 
 const initialState: UserState = {
-  firstName: 'John',
-  lastName: 'Harper',
-  email: 'Harper5755@yopmail.com',
-  phoneNumber: '555-123-4567',
-  maritalStatus: 'Married',
-  education: 'Bachelor\'s degree',
-  birthDay: '13',
-  birthMonth: '10',
-  birthYear: '1985',
-  bankName: 'Commonwealth Bank',
-  accountHolderName: 'John Harper',
-  bsb: '062-000',
-  accountNumber: '123456789',
-  employmentStatus: 'Full-time',
-  employerName: 'Tech Solutions Inc.',
-  jobTitle: 'Senior Software Engineer',
-  idDocument: 'passport.pdf',
+  id: null,
+  firstName: '',
+  lastName: '',
+  email: '',
+  phoneNumber: '',
+  maritalStatus: '',
+  education: '',
+  birthDay: '',
+  birthMonth: '',
+  birthYear: '',
+  employmentStatus: '',
+  employerName: '',
+  jobTitle: '',
+  idDocument: null,
+  walletAddress: null, // <-- ADDED THIS LINE
+  status: 'idle',
 };
 
-export const exchangePlaidTokenAndRefreshBankInfo = createAsyncThunk(
-  'user/exchangePlaidToken',
-  async (public_token: string) => {
-    const response = await axios.post('http://localhost:3001/api/exchange_public_token', { public_token });
-    return response.data;
+export const fetchUser = createAsyncThunk('user/fetchUser', async () => {
+  const response = await axios.get('http://localhost:3001/api/user');
+  return response.data;
+});
+
+// --- NEW THUNK TO SAVE THE WALLET ADDRESS ---
+export const saveWalletAddress = createAsyncThunk(
+  'user/saveWalletAddress',
+  async (walletAddress: string | null) => {
+    const response = await axios.post('http://localhost:3001/api/user/wallet', { walletAddress });
+    return response.data.user;
   }
 );
+
 
 export const userSlice = createSlice({
   name: 'user',
@@ -61,17 +66,19 @@ export const userSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(exchangePlaidTokenAndRefreshBankInfo.pending, (_state) => { // Fixed: Prefixed unused 'state' with _
-        console.log("Exchanging token and refreshing bank info...");
+      .addCase(fetchUser.pending, (state) => {
+        state.status = 'loading';
       })
-      .addCase(exchangePlaidTokenAndRefreshBankInfo.fulfilled, (state, action) => {
-        state.bankName = action.payload.bankName;
-        state.accountHolderName = action.payload.accountHolderName;
-        state.accountNumber = action.payload.accountNumber;
-        console.log("Bank info updated successfully!");
+      .addCase(fetchUser.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        Object.assign(state, action.payload);
       })
-      .addCase(exchangePlaidTokenAndRefreshBankInfo.rejected, (_state) => { // Fixed: Prefixed unused 'state' with _
-        console.error("Failed to update bank info.");
+      .addCase(fetchUser.rejected, (state) => {
+        state.status = 'failed';
+      })
+      // Handle the state update after saving the wallet address
+      .addCase(saveWalletAddress.fulfilled, (state, action) => {
+        state.walletAddress = action.payload.walletAddress;
       });
   },
 });
