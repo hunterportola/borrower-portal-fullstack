@@ -1,24 +1,39 @@
 import store from '../config/db.js';
+import { getRavenUserFromAuth } from '../auth/utils/ravendb-sync.js';
 
 export const getUser = async (req, res) => {
-    const session = store.openSession();
-    const user = await session.load('users/1');
-    res.json(user);
+    try {
+        const user = await getRavenUserFromAuth(req);
+        
+        if (!user) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+        
+        res.json(user);
+    } catch (error) {
+        console.error('Get user error:', error);
+        res.status(500).json({ error: 'Failed to get user' });
+    }
 };
 
 export const updateUserWallet = async (req, res) => {
-    const session = store.openSession();
     try {
-        const { walletAddress } = req.body;
-        const user = await session.load('users/1');
-        if (user) {
-            user.walletAddress = walletAddress;
-            await session.saveChanges();
-            res.json({ success: true, user });
-        } else {
-            res.status(404).json({ error: 'User not found' });
+        const user = await getRavenUserFromAuth(req);
+        
+        if (!user) {
+            return res.status(401).json({ error: 'Authentication required' });
         }
+
+        const { walletAddress } = req.body;
+        const session = store.openSession();
+        
+        user.walletAddress = walletAddress;
+        user.updatedAt = new Date();
+        await session.saveChanges();
+        
+        res.json({ success: true, user });
     } catch (error) {
+        console.error('Update wallet error:', error);
         res.status(500).json({ error: 'Failed to save wallet address' });
     }
 };

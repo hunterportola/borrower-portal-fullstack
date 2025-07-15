@@ -1,15 +1,26 @@
 import store from '../config/db.js';
+import { getRavenUserFromAuth } from '../auth/utils/ravendb-sync.js';
 
 export const getLoanDetails = async (req, res) => {
-    const session = store.openSession();
-    // In a real multi-user app, you would get the userId from the request
-    const loan = await session.query({ collection: 'Loans' })
-        .whereEquals('userId', 'users/1')
-        .firstOrNull();
+    try {
+        const user = await getRavenUserFromAuth(req);
+        
+        if (!user) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
 
-    if (loan) {
-        res.json(loan);
-    } else {
-        res.status(404).json({ error: 'Loan not found for this user.' });
+        const session = store.openSession();
+        const loan = await session.query({ collection: 'Loans' })
+            .whereEquals('userId', user.id)
+            .firstOrNull();
+
+        if (loan) {
+            res.json(loan);
+        } else {
+            res.status(404).json({ error: 'Loan not found for this user.' });
+        }
+    } catch (error) {
+        console.error('Get loan details error:', error);
+        res.status(500).json({ error: 'Failed to get loan details' });
     }
 };
