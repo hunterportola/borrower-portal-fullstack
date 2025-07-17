@@ -101,3 +101,14 @@ export const createAchPayment = async (req, res) => {
         res.status(500).json({ success: false, error: error.response?.data?.error_message || "An unknown error occurred." });
     }
 };
+
+export const handlePlaidWebhook = async (req, res) => {
+    try {
+        const webhookData = req.body;
+        console.log('Received Plaid webhook:', webhookData);
+        res.json({ received: true });
+    } catch (error) {
+        console.error('Webhook error:', error);
+        res.status(500).json({ error: 'Webhook processing failed' });
+    }
+};

@@ -21,6 +21,8 @@ export function createRavenDBAdapter(documentStore = store) {
                 return doc;
             } catch (error) {
                 throw new Error(`Failed to create ${model}: ${error.message}`);
+            } finally {
+                session.dispose();
             }
         },
 
@@ -41,6 +43,8 @@ export function createRavenDBAdapter(documentStore = store) {
                 return results[0] || null;
             } catch (error) {
                 throw new Error(`Failed to find ${model}: ${error.message}`);
+            } finally {
+                session.dispose();
             }
         },
 

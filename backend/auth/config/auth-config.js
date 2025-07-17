@@ -1,8 +1,8 @@
 import { betterAuth } from 'better-auth';
-// import { createRavenDBAdapter } from '../adapters/ravendb-adapter.js';
+import { createRavenDBAdapter } from '../adapters/ravendb-adapter.js';
 
 const authConfig = {
-    // database: createRavenDBAdapter(), // TODO: Enable when RavenDB adapter is fully tested
+    database: createRavenDBAdapter(),
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: process.env.BETTER_AUTH_URL,
     basePath: '/api/auth',
