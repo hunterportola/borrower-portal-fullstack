@@ -2,12 +2,11 @@ import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { BrowserProvider } from 'ethers';
 import type { AppDispatch, RootState } from '../store/store';
-import { saveWalletAddress } from '../store/userSlice'; // <-- 1. IMPORT THE NEW THUNK
+import { saveWalletAddress } from '../store/userSlice';
 import { Button } from './Button';
 
 export function WalletManagement() {
   const dispatch: AppDispatch = useDispatch();
-  // --- 2. GET USER AND WALLET ADDRESS FROM THE USER SLICE ---
   const { walletAddress } = useSelector((state: RootState) => state.user);
   const [isConnecting, setIsConnecting] = useState(false);
 
@@ -19,11 +18,10 @@ export function WalletManagement() {
     setIsConnecting(true);
     try {
       const provider = new BrowserProvider(window.ethereum);
-      await provider.send("eth_requestAccounts", []); // Prompt user to connect
+      await provider.send("eth_requestAccounts", []);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
       
-      // --- 3. DISPATCH THE ACTION TO SAVE THE ADDRESS ---
       dispatch(saveWalletAddress(address));
 
     } catch (err: any) {
@@ -34,7 +32,6 @@ export function WalletManagement() {
   };
 
   const handleDisconnect = () => {
-    // Dispatch an action to remove the address from the database
     dispatch(saveWalletAddress(null));
   };
 

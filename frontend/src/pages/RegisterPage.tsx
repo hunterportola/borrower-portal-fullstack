@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { signUp } from '../lib/auth';
 import { useAuth } from '../contexts/AuthContext';
-import { Button } from '../components/Button';
-import { InputMedium } from '../components/InputMedium';
 
 export function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -11,24 +8,20 @@ export function RegisterPage() {
     password: '',
     confirmPassword: '',
     firstName: '',
-    lastName: '',
+    lastName: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  
-  const { isAuthenticated } = useAuth();
+
+  const { isAuthenticated, signUp } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect if already authenticated
   if (isAuthenticated) {
     return <Navigate to="/borrower-profile" replace />;
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,33 +29,21 @@ export function RegisterPage() {
     setIsLoading(true);
     setError('');
 
-    // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       setIsLoading(false);
       return;
     }
 
-    try {
-      const result = await signUp.email({
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-      });
+    const result = await signUp(formData.email, formData.password, formData.firstName, formData.lastName);
 
-      if (result.error) {
-        setError(result.error.message || 'Registration failed');
-      } else {
-        // Successful registration, navigate to borrower profile
-        navigate('/borrower-profile');
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
-      console.error('Registration error:', err);
-    } finally {
-      setIsLoading(false);
+    if (result.success) {
+      navigate('/borrower-profile');
+    } else {
+      setError(result.error || 'Registration failed');
     }
+
+    setIsLoading(false);
   };
 
   return (
@@ -76,8 +57,8 @@ export function RegisterPage() {
             Create your account to get started
           </p>
         </div>
-        
-        <form className="space-y-8" onSubmit={handleSubmit}>
+
+        <form className="space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded font-sans text-sm">
               {error}
@@ -85,70 +66,96 @@ export function RegisterPage() {
           )}
           
           <div className="grid grid-cols-2 gap-4">
-            <InputMedium
-              id="firstName"
-              name="firstName"
-              type="text"
+            <div className="space-y-1">
+              <label htmlFor="firstName" className="block text-sm font-medium text-steel font-sans">
+                First name
+              </label>
+              <input
+                id="firstName"
+                name="firstName"
+                type="text"
+                required
+                value={formData.firstName}
+                onChange={handleChange}
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-portola-green focus:border-portola-green focus:z-10 sm:text-sm font-sans"
+                placeholder="First name"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="lastName" className="block text-sm font-medium text-steel font-sans">
+                Last name
+              </label>
+              <input
+                id="lastName"
+                name="lastName"
+                type="text"
+                required
+                value={formData.lastName}
+                onChange={handleChange}
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-portola-green focus:border-portola-green focus:z-10 sm:text-sm font-sans"
+                placeholder="Last name"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="email" className="block text-sm font-medium text-steel font-sans">
+              Email address
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
               required
-              value={formData.firstName}
+              value={formData.email}
               onChange={handleChange}
-              label="First name"
-            />
-            
-            <InputMedium
-              id="lastName"
-              name="lastName"
-              type="text"
-              required
-              value={formData.lastName}
-              onChange={handleChange}
-              label="Last name"
+              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-portola-green focus:border-portola-green focus:z-10 sm:text-sm font-sans"
+              placeholder="Enter your email"
             />
           </div>
 
-          <InputMedium
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={formData.email}
-            onChange={handleChange}
-            label="Email address"
-          />
+          <div className="space-y-1">
+            <label htmlFor="password" className="block text-sm font-medium text-steel font-sans">
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              required
+              value={formData.password}
+              onChange={handleChange}
+              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-portola-green focus:border-portola-green focus:z-10 sm:text-sm font-sans"
+              placeholder="Enter your password"
+            />
+          </div>
 
-          <InputMedium
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={formData.password}
-            onChange={handleChange}
-            label="Password"
-          />
-
-          <InputMedium
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            label="Confirm password"
-          />
+          <div className="space-y-1">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-steel font-sans">
+              Confirm password
+            </label>
+            <input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              required
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-portola-green focus:border-portola-green focus:z-10 sm:text-sm font-sans"
+              placeholder="Confirm your password"
+            />
+          </div>
 
           <div className="space-y-4">
-            <Button
+            <button
               type="submit"
               disabled={isLoading}
-              size="lg"
-              className="w-full"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-portola-green hover:bg-burnished-brass focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-portola-green disabled:opacity-50 disabled:cursor-not-allowed font-sans"
             >
               {isLoading ? 'Creating account...' : 'Create account'}
-            </Button>
-
+            </button>
+            
             <div className="text-center">
               <p className="font-sans text-sm text-steel">
                 Already have an account?{' '}

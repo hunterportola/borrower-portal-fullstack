@@ -1,11 +1,12 @@
+import { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState, AppDispatch } from '../store/store';
-import { removeItem } from '../store/activitySlice';
+import { fetchActivities } from '../store/activitySlice'; 
 import type { ActivityItem } from '../store/activitySlice';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 
-// New component to render transaction-specific activities
+// Component to render transaction-specific activities
 function TransactionActivity({ item }: { item: ActivityItem }) {
   const getStatusStyles = () => {
     switch(item.txStatus) {
@@ -27,7 +28,7 @@ function TransactionActivity({ item }: { item: ActivityItem }) {
         <span className="text-xl">{icon}</span>
         <div>
           <p className={`font-sans ${color}`}>{item.message}</p>
-          <p className="text-xs font-sans text-steel mt-1">{item.timestamp}</p>
+          <p className="text-xs font-sans text-steel mt-1">{new Date(item.timestamp).toLocaleString()}</p>
         </div>
       </div>
       {item.txHash && (
@@ -45,12 +46,20 @@ function TransactionActivity({ item }: { item: ActivityItem }) {
 
 export function ActivityPage() {
   const dispatch: AppDispatch = useDispatch();
-  const activities = useSelector((state: RootState) => state.activity.items);
+  const { items: activities, status } = useSelector((state: RootState) => state.activity);
 
-  const handleActionClick = (id: string) => {
-    console.log(`Performing action for activity: ${id}`);
-    dispatch(removeItem(id));
-  };
+  useEffect(() => {
+    // Fetch activities periodically to get updates
+    const interval = setInterval(() => {
+        dispatch(fetchActivities());
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [dispatch]);
+
+  if (status === 'loading' && activities.length === 0) {
+    return <div className="text-center p-24 font-serif text-steel">Loading Activities...</div>;
+  }
 
   return (
     <div className="py-8">
@@ -68,16 +77,13 @@ export function ActivityPage() {
                     <TransactionActivity item={activity} />
                   ) : (
                     <div className="p-4 flex items-center justify-between">
-                      <div>
-                        <p className="font-sans text-charcoal">{activity.message}</p>
-                        <p className="text-xs font-sans text-steel mt-1">{activity.timestamp}</p>
+                      <div className="flex items-center gap-4">
+                        {activity.actionType === 'payment_success' && <span className="text-xl">✅</span>}
+                        <div>
+                          <p className="font-sans text-charcoal">{activity.message}</p>
+                          <p className="text-xs font-sans text-steel mt-1">{new Date(activity.timestamp).toLocaleString()}</p>
+                        </div>
                       </div>
-                      <Button 
-                        variant={activity.actionType === 'sign' ? 'primary' : 'secondary'}
-                        onClick={() => handleActionClick(activity.id)}
-                      >
-                        {activity.actionType === 'sign' ? 'Sign' : 'Add info'}
-                      </Button>
                     </div>
                   )}
                 </CardContent>

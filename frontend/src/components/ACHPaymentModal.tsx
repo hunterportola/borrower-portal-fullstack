@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { usePlaidLink } from 'react-plaid-link';
 import axios from 'axios';
-import type { RootState } from '../store/store';
+import type { RootState, AppDispatch } from '../store/store';
+import { fetchActivities } from '../store/activitySlice';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { DollarAmountInput } from './DollarAmountInput';
@@ -22,7 +23,7 @@ const AddNewAccountFlow = ({ onAccountAdded }: { onAccountAdded: () => void }) =
     useEffect(() => {
         const generateToken = async () => {
             try {
-                const response = await axios.post('http://localhost:3001/api/create_link_token');
+                const response = await axios.post('http://localhost:3001/api/plaid/create_link_token');
                 setLinkToken(response.data.link_token);
             } catch (error) {
                 console.error("Failed to generate Plaid link token:", error);
@@ -32,7 +33,7 @@ const AddNewAccountFlow = ({ onAccountAdded }: { onAccountAdded: () => void }) =
     }, []);
 
     const onSuccess = useCallback(async (public_token: string) => {
-        await axios.post('http://localhost:3001/api/exchange_public_token', { public_token });
+        await axios.post('http://localhost:3001/api/plaid/exchange_public_token', { public_token });
         onAccountAdded();
     }, [onAccountAdded]);
 
@@ -67,8 +68,9 @@ const BankAccountRow = ({ account, isSelected, onSelect }: { account: BankAccoun
 );
 
 export function ACHPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void; }) {
+    const dispatch: AppDispatch = useDispatch();
     const { nextPaymentAmount } = useSelector((state: RootState) => state.loan);
-    const [view, setView] = useState<'select_account' | 'add_account' | 'confirm_payment'>('select_account');
+    const [view, setView] = useState<'select_account' | 'add_account' | 'confirm_payment' | 'success'>('select_account');
     const [accounts, setAccounts] = useState<BankAccount[]>([]);
     const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -80,8 +82,6 @@ export function ACHPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose:
         try {
             const { data } = await axios.get('http://localhost:3001/api/plaid/accounts');
             
-            // --- THIS IS THE FIX ---
-            // Ensure the response from the API is an array before setting state
             if (Array.isArray(data)) {
                 setAccounts(data);
                 if (data.length > 0) {
@@ -91,7 +91,6 @@ export function ACHPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose:
                     setView('add_account');
                 }
             } else {
-                // Handle cases where the API returns an unexpected response
                 console.error("API did not return an array for accounts:", data);
                 setError("Received an invalid response from the server.");
             }
@@ -115,15 +114,16 @@ export function ACHPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose:
         setError(null);
 
         try {
-            const response = await axios.post('http://localhost:3001/api/ach/payment', {
+            const response = await axios.post('http://localhost:3001/api/plaid/ach/payment', {
                 amount: parseFloat(amount).toFixed(2),
                 accessToken: selectedAccount.accessToken,
                 accountId: selectedAccount.accountId,
             });
 
             if (response.data.success) {
-                alert('ACH payment initiated successfully!');
-                handleClose();
+                setView('success');
+                dispatch(fetchActivities());
+                setTimeout(() => handleClose(), 2000);
             } else {
                 setError(response.data.error || 'Payment failed.');
             }
@@ -145,64 +145,86 @@ export function ACHPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose:
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 
+    const renderContent = () => {
+        switch (view) {
+            case 'success':
+                return (
+                    <div className="text-center p-8">
+                        <h3 className="font-serif text-lg text-grass">✅ ACH Payment Initiated!</h3>
+                        <p className="text-sm text-steel mt-2">
+                            You can track the progress in the Activity section. This window will close shortly.
+                        </p>
+                    </div>
+                );
+            case 'select_account':
+                if (accounts.length === 0) {
+                    return <AddNewAccountFlow onAccountAdded={fetchAccounts} />;
+                }
+                return (
+                    <div className="space-y-4">
+                        <p className="text-sm font-sans text-steel">Select an account to pay with:</p>
+                        {accounts.map(acc => (
+                            <BankAccountRow key={acc.accountId} account={acc} isSelected={selectedAccount?.accountId === acc.accountId} onSelect={() => setSelectedAccount(acc)} />
+                        ))}
+                        <Button variant="primary" className="w-full" disabled={!selectedAccount} onClick={() => setView('confirm_payment')}>
+                            Continue
+                        </Button>
+                        <hr/>
+                        <Button variant="outline" className="w-full" onClick={() => setView('add_account')}>
+                            Link a New Account
+                        </Button>
+                    </div>
+                );
+            case 'confirm_payment':
+                if (!selectedAccount) {
+                    setView('select_account');
+                    return null;
+                }
+                return (
+                    <div className="space-y-4">
+                        <div className="p-4 border border-pebble rounded-md bg-sand">
+                            <p className="font-sans text-sm text-steel">Paying with</p>
+                            <div className="mt-2 text-left space-y-1">
+                                <p className="font-serif text-lg text-portola-green">
+                                    <span className="font-bold capitalize">{selectedAccount.subtype.replace('_', ' ')}</span> ending in {selectedAccount.mask}
+                                </p>
+                            </div>
+                        </div>
+                        {error && <p className="text-sm text-center text-alert">{error}</p>}
+                        <div className="p-4 border-2 border-dashed border-pebble rounded-md space-y-4">
+                        {!showPartialInput ? (
+                            <div className="space-y-3">
+                                <Button variant="success" size="lg" className="w-full" onClick={() => handlePay(nextPaymentAmount.toString())} disabled={isProcessing}>
+                                    {isProcessing ? 'Processing...' : `Pay Next Payment (${formatCurrency(nextPaymentAmount)})`}
+                                </Button>
+                                <Button variant="outline" size="lg" className="w-full" onClick={() => setShowPartialInput(true)} disabled={isProcessing}>
+                                    Pay Other Amount
+                                </Button>
+                            </div>
+                        ) : (
+                            <div>
+                                <DollarAmountInput label="Payment Amount (USD)" value={partialAmount} onChange={(val) => setPartialAmount(val)} size="large" />
+                                <Button variant="success" size="lg" className="w-full mt-2" onClick={() => handlePay(partialAmount)} disabled={!partialAmount || parseFloat(partialAmount) <= 0 || isProcessing}>
+                                    {isProcessing ? 'Processing...' : 'Submit Payment'}
+                                </Button>
+                            </div>
+                        )}
+                        </div>
+                         <Button variant="ghost" size="sm" className="w-full" onClick={() => {setShowPartialInput(false); setView('select_account')}}>
+                            Change Account
+                        </Button>
+                    </div>
+                );
+            case 'add_account':
+                return <AddNewAccountFlow onAccountAdded={fetchAccounts} />;
+            default:
+                return null;
+        }
+    };
+
     return (
         <Modal isOpen={isOpen} onClose={handleClose} title="Pay with Bank Account (ACH)">
-            {view === 'select_account' && accounts.length > 0 && (
-                <div className="space-y-4">
-                    <p className="text-sm font-sans text-steel">Select an account to pay with:</p>
-                    {accounts.map(acc => (
-                        <BankAccountRow key={acc.accountId} account={acc} isSelected={selectedAccount?.accountId === acc.accountId} onSelect={() => setSelectedAccount(acc)} />
-                    ))}
-                    <Button variant="primary" className="w-full" disabled={!selectedAccount} onClick={() => setView('confirm_payment')}>
-                        Continue
-                    </Button>
-                    <hr/>
-                    <Button variant="outline" className="w-full" onClick={() => setView('add_account')}>
-                        Link a New Account
-                    </Button>
-                </div>
-            )}
-
-            {view === 'confirm_payment' && selectedAccount && (
-                <div className="space-y-4">
-                    <div className="p-4 border border-pebble rounded-md bg-sand">
-                        <p className="font-sans text-sm text-steel">Paying with</p>
-                        <div className="mt-2 text-left space-y-1">
-                            <p className="font-serif text-lg text-portola-green">
-                                <span className="font-bold capitalize">{selectedAccount.subtype.replace('_', ' ')}</span> ending in {selectedAccount.mask}
-                            </p>
-                        </div>
-                    </div>
-                    {error && <p className="text-sm text-center text-alert">{error}</p>}
-                    <div className="p-4 border-2 border-dashed border-pebble rounded-md space-y-4">
-                    {!showPartialInput ? (
-                        <div className="space-y-3">
-                            <Button variant="success" size="lg" className="w-full" onClick={() => handlePay(nextPaymentAmount.toString())} disabled={isProcessing}>
-                                {isProcessing ? 'Processing...' : `Pay Next Payment (${formatCurrency(nextPaymentAmount)})`}
-                            </Button>
-                            <Button variant="outline" size="lg" className="w-full" onClick={() => setShowPartialInput(true)} disabled={isProcessing}>
-                                Pay Other Amount
-                            </Button>
-                        </div>
-                    ) : (
-                        <div>
-                            <DollarAmountInput label="Payment Amount (USD)" value={partialAmount} onChange={(val) => setPartialAmount(val)} size="large" />
-                            <Button variant="success" size="lg" className="w-full mt-2" onClick={() => handlePay(partialAmount)} disabled={!partialAmount || parseFloat(partialAmount) <= 0 || isProcessing}>
-                                {isProcessing ? 'Processing...' : 'Submit Payment'}
-                            </Button>
-                        </div>
-                    )}
-                    </div>
-                     <Button variant="ghost" size="sm" className="w-full" onClick={() => {setShowPartialInput(false); setView('select_account')}}>
-                        Change Account
-                    </Button>
-                </div>
-            )}
-
-            {view === 'add_account' && (
-                <AddNewAccountFlow onAccountAdded={fetchAccounts} />
-            )}
-
+            {renderContent()}
             {error && view !== 'confirm_payment' && (
                  <p className="text-center text-alert mt-4">{error}</p>
             )}

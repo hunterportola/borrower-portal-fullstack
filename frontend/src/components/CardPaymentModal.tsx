@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { loadStripe } from '@stripe/stripe-js';
 import type { PaymentMethod } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import axios from 'axios';
-import type { RootState } from '../store/store';
+import type { RootState, AppDispatch } from '../store/store';
+import { fetchActivities } from '../store/activitySlice';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { DollarAmountInput } from './DollarAmountInput';
@@ -12,7 +13,6 @@ import { cn } from '../utils';
 
 const stripePromise = loadStripe('pk_test_51RkuoX2L6IuYsTbLbuy2fakRTrnfy59opAXnOqa3EhXDm1vg0rfFlIukpZjZUq3XCrVFe2daXdpUWzxU8NEHm1bz00tJjAaRWC');
 
-// --- Reusable UI Components ---
 const AddNewCardForm = ({ onCardAdded, onCancel }: { onCardAdded: () => void; onCancel: () => void; }) => {
     const stripe = useStripe();
     const elements = useElements();
@@ -48,18 +48,20 @@ const AddNewCardForm = ({ onCardAdded, onCancel }: { onCardAdded: () => void; on
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <p className="text-sm text-steel">Add and save a new card for future payments.</p>
+        <form onSubmit={handleSubmit} className="space-y-4 p-4 border-2 border-dashed border-pebble rounded-md">
+            <p className="text-sm text-steel">Add and save a new card.</p>
             <div className="p-4 bg-sand border border-pebble rounded-md">
                 <CardElement />
             </div>
             {error && <p className="text-xs text-center text-alert">{error}</p>}
-            <Button type="submit" variant="primary" size="lg" className="w-full" disabled={isProcessing || !stripe}>
-                {isProcessing ? 'Saving...' : 'Save Card'}
-            </Button>
-            <Button variant="ghost" size="sm" className="w-full" onClick={onCancel}>
-                Cancel
-            </Button>
+            <div className="flex gap-4">
+                <Button type="button" variant="ghost" className="w-full" onClick={onCancel}>
+                    Cancel
+                </Button>
+                <Button type="submit" variant="primary" className="w-full" disabled={isProcessing || !stripe}>
+                    {isProcessing ? 'Saving...' : 'Save Card'}
+                </Button>
+            </div>
         </form>
     );
 };
@@ -82,11 +84,10 @@ const CardRow = ({ pm, isSelected, onSelect }: { pm: PaymentMethod; isSelected: 
     </div>
 );
 
-
-// --- Main Modal Component ---
 export function CardPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void; }) {
+    const dispatch: AppDispatch = useDispatch();
     const { nextPaymentAmount } = useSelector((state: RootState) => state.loan);
-    const [view, setView] = useState<'select_card' | 'add_card' | 'confirm_payment'>('select_card');
+    const [view, setView] = useState<'select_card' | 'add_card' | 'confirm_payment' | 'success'>('select_card');
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [selectedCard, setSelectedCard] = useState<PaymentMethod | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -99,11 +100,9 @@ export function CardPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose
             const { data } = await axios.get('http://localhost:3001/api/stripe/payment-methods');
             setPaymentMethods(data);
             if (data.length > 0) {
-                // Simulate selecting the last-used card by selecting the first one in the list.
-                // In a real app, you would store the last used ID and find it here.
                 setSelectedCard(data[0]);
             } else {
-                setView('add_card'); // No cards, force user to add one
+                setView('add_card');
             }
         } catch (err) {
             console.error("Could not fetch payment methods", err);
@@ -129,9 +128,10 @@ export function CardPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose
                 payment_method: selectedCard.id,
             });
 
-            if (response.data.status === 'succeeded') {
-                alert('Payment successful!');
-                handleClose();
+            if (response.data.status === 'succeeded' || response.data.status === 'processing') {
+                setView('success');
+                dispatch(fetchActivities());
+                setTimeout(() => handleClose(), 2000);
             } else {
                 setError('Payment failed. Please try another card.');
             }
@@ -158,10 +158,19 @@ export function CardPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose
 
     const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 
-    return (
-        <Modal isOpen={isOpen} onClose={handleClose} title="Pay with Credit/Debit Card">
-            <Elements stripe={stripePromise}>
-                {view === 'select_card' && (
+    const renderContent = () => {
+        switch (view) {
+            case 'success':
+                return (
+                    <div className="text-center p-8">
+                        <h3 className="font-serif text-lg text-grass">✅ Payment Sent!</h3>
+                        <p className="text-sm text-steel mt-2">
+                            Your payment is processing. You can track the final status in the Activity section.
+                        </p>
+                    </div>
+                );
+            case 'select_card':
+                return (
                     <div className="space-y-4">
                         <p className="text-sm font-sans text-steel">Select a card to pay with:</p>
                         {paymentMethods.map(pm => (
@@ -175,9 +184,13 @@ export function CardPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose
                             Add a New Card
                         </Button>
                     </div>
-                )}
-
-                {view === 'confirm_payment' && selectedCard && (
+                );
+            case 'confirm_payment':
+                if (!selectedCard) {
+                    setView('select_card');
+                    return null;
+                }
+                return (
                      <div className="space-y-4">
                         <div className="p-4 border border-pebble rounded-md bg-sand">
                             <p className="font-sans text-sm text-steel">Paying with</p>
@@ -211,11 +224,18 @@ export function CardPaymentModal({ isOpen, onClose }: { isOpen: boolean; onClose
                             Change Card
                         </Button>
                     </div>
-                )}
+                );
+            case 'add_card':
+                return <AddNewCardForm onCardAdded={handleCardAdded} onCancel={() => setView('select_card')} />;
+            default:
+                return null;
+        }
+    };
 
-                {view === 'add_card' && (
-                    <AddNewCardForm onCardAdded={handleCardAdded} onCancel={() => setView('select_card')} />
-                )}
+    return (
+        <Modal isOpen={isOpen} onClose={handleClose} title="Pay with Credit/Debit Card">
+            <Elements stripe={stripePromise}>
+                {renderContent()}
             </Elements>
         </Modal>
     );

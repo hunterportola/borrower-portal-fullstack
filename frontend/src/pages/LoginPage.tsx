@@ -1,20 +1,16 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { signIn } from '../lib/auth';
 import { useAuth } from '../contexts/AuthContext';
-import { Button } from '../components/Button';
-import { InputMedium } from '../components/InputMedium';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  
-  const { isAuthenticated } = useAuth();
+
+  const { isAuthenticated, signIn } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect if already authenticated
   if (isAuthenticated) {
     return <Navigate to="/borrower-profile" replace />;
   }
@@ -24,24 +20,15 @@ export function LoginPage() {
     setIsLoading(true);
     setError('');
 
-    try {
-      const result = await signIn.email({
-        email,
-        password,
-      });
+    const result = await signIn(email, password);
 
-      if (result.error) {
-        setError(result.error.message || 'Login failed');
-      } else {
-        // Successful login, navigate to borrower profile
-        navigate('/borrower-profile');
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
-      console.error('Login error:', err);
-    } finally {
-      setIsLoading(false);
+    if (result.success) {
+      navigate('/borrower-profile');
+    } else {
+      setError(result.error || 'Login failed');
     }
+
+    setIsLoading(false);
   };
 
   return (
@@ -55,7 +42,7 @@ export function LoginPage() {
             Sign in to access your account
           </p>
         </div>
-        
+
         <form className="space-y-8" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded font-sans text-sm">
@@ -63,38 +50,47 @@ export function LoginPage() {
             </div>
           )}
           
-          <InputMedium
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            label="Email address"
-          />
+          <div className="space-y-1">
+            <label htmlFor="email" className="block text-sm font-medium text-steel font-sans">
+              Email address
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-portola-green focus:border-portola-green focus:z-10 sm:text-sm font-sans"
+              placeholder="Enter your email"
+            />
+          </div>
 
-          <InputMedium
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            label="Password"
-          />
+          <div className="space-y-1">
+            <label htmlFor="password" className="block text-sm font-medium text-steel font-sans">
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-portola-green focus:border-portola-green focus:z-10 sm:text-sm font-sans"
+              placeholder="Enter your password"
+            />
+          </div>
 
           <div className="space-y-4">
-            <Button
+            <button
               type="submit"
               disabled={isLoading}
-              size="lg"
-              className="w-full"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-portola-green hover:bg-burnished-brass focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-portola-green disabled:opacity-50 disabled:cursor-not-allowed font-sans"
             >
               {isLoading ? 'Signing in...' : 'Sign in'}
-            </Button>
-
+            </button>
+            
             <div className="text-center">
               <p className="font-sans text-sm text-steel">
                 Don't have an account?{' '}
